@@ -77,6 +77,7 @@
                                 </span>
                             </div>
 
+                            <field name="use_weighing" invisible="1"/>
                             <field name="line_ids" nolabel="1">
                                 <tree string="Productos"
                                     editable="bottom"
@@ -89,7 +90,8 @@
                                     <field name="product_id" string="Producto"
                                         readonly="1" force_save="1"/>
                                     <field name="is_weighed" string="Por Peso"
-                                        readonly="1" force_save="1" optional="show"/>
+                                        readonly="1" force_save="1" optional="show"
+                                        column_invisible="not parent.use_weighing"/>
                                     <field name="currency_id" column_invisible="1"/>
                                     <field name="current_price" string="Precio Actual"
                                         readonly="1" force_save="1" class="text-end"/>
