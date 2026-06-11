@@ -46,8 +46,18 @@
                         </span>
                     </div>
 
+                    <!-- ── Aviso: falta lista de precios ── -->
+                    <div class="alert alert-info" role="alert"
+                         invisible="pricelist_ids">
+                        <i class="fa fa-info-circle me-1"/>
+                        Seleccioná una o más listas de precios para cargar los
+                        productos. Los precios actuales se toman de la primera
+                        lista seleccionada.
+                    </div>
+
                     <!-- ── Layout sidebar + tabla ── -->
-                    <div class="row g-0" style="min-height: 400px;">
+                    <div class="row g-0" style="min-height: 400px;"
+                         invisible="not pricelist_ids">
 
                         <!-- Sidebar categorías -->
                         <div class="col-lg-3 col-md-4 pe-3 border-end"
@@ -128,7 +138,9 @@
         <field name="view_id" ref="view_sale_price_update_wizard_form"/>
     </record>
 
-    <!-- ── Server action: product.product (variantes) ── -->
+    <!-- ── Server action: product.product (variantes) ──
+         Solo abre el wizard con los productos preseleccionados en contexto.
+         La carga de líneas ocurre recién al elegir la lista de precios. -->
     <record id="action_sale_price_update_from_product" model="ir.actions.server">
         <field name="name">Actualizar Precios de Venta</field>
         <field name="model_id" ref="product.model_product_product"/>
@@ -136,10 +148,14 @@
         <field name="binding_view_types">list</field>
         <field name="state">code</field>
         <field name="code">
-action = env['sale.price.update.wizard'].with_context(
-    active_ids=records.ids,
-    active_model='product.product',
-).create({}).action_load_products()
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Actualizar Precios de Venta',
+    'res_model': 'sale.price.update.wizard',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': dict(env.context, active_ids=records.ids, active_model='product.product'),
+}
         </field>
     </record>
 
@@ -151,10 +167,14 @@ action = env['sale.price.update.wizard'].with_context(
         <field name="binding_view_types">list</field>
         <field name="state">code</field>
         <field name="code">
-action = env['sale.price.update.wizard'].with_context(
-    active_ids=records.ids,
-    active_model='product.template',
-).create({}).action_load_products()
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Actualizar Precios de Venta',
+    'res_model': 'sale.price.update.wizard',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': dict(env.context, active_ids=records.ids, active_model='product.template'),
+}
         </field>
     </record>
 
