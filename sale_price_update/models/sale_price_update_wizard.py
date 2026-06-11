@@ -83,6 +83,15 @@ class SalePriceUpdateWizard(models.TransientModel):
             domain.append(("categ_id", "child_of", self.filter_categ_id.id))
         return domain
 
+    def _weighing_enabled(self):
+        """True si el módulo sale_stock_weighing está instalado."""
+        return "is_weighed_price" in self.env["product.pricelist.item"]._fields
+
+    def _is_weighed_product(self, product):
+        return self._weighing_enabled() and getattr(
+            product, "is_weighed_product", False
+        )
+
     def _get_pricelist_prices(self, products, pricelist):
         """Precios vigentes de un lote de productos en la lista dada.
 
@@ -90,27 +99,50 @@ class SalePriceUpdateWizard(models.TransientModel):
         todos los productos) en vez de resolver producto por producto.
         Resuelve cualquier tipo de regla: fija, fórmula, descuento, por
         plantilla o categoría. Devuelve {product_id: precio}.
+
+        Los productos pesables (sale_stock_weighing) se resuelven vía
+        _get_product_price, que ese módulo sobreescribe para devolver el
+        precio por unidad de peso ($/kg).
         """
         if not products:
             return {}
         if not pricelist:
             return {p.id: p.lst_price for p in products}
-        try:
-            rules = pricelist._compute_price_rule(
-                products, 1.0, date=fields.Date.today()
+
+        prices = {}
+
+        # Productos pesables: el override de sale_stock_weighing vive en
+        # _get_product_price, no en _compute_price_rule.
+        weighed = products.browse()
+        if self._weighing_enabled():
+            weighed = products.filtered(
+                lambda p: getattr(p, "is_weighed_product", False)
             )
-            return {pid: price for pid, (price, _rule) in rules.items()}
-        except Exception:
-            # Fallback defensivo ante cambios de firma entre versiones
-            prices = {}
-            for product in products:
+            for product in weighed:
                 try:
                     prices[product.id] = pricelist._get_product_price(
                         product, 1.0, date=fields.Date.today()
                     )
                 except Exception:
                     prices[product.id] = product.lst_price
-            return prices
+
+        normal = products - weighed
+        if normal:
+            try:
+                rules = pricelist._compute_price_rule(
+                    normal, 1.0, date=fields.Date.today()
+                )
+                prices.update({pid: price for pid, (price, _rule) in rules.items()})
+            except Exception:
+                # Fallback defensivo ante cambios de firma entre versiones
+                for product in normal:
+                    try:
+                        prices[product.id] = pricelist._get_product_price(
+                            product, 1.0, date=fields.Date.today()
+                        )
+                    except Exception:
+                        prices[product.id] = product.lst_price
+        return prices
 
     def _get_current_pricelist_price(self, product, pricelist):
         """Precio vigente de un solo producto (wrapper del batch)."""
@@ -140,6 +172,7 @@ class SalePriceUpdateWizard(models.TransientModel):
                 "increase_percent": 0.0,
                 "new_price": current_price * (1.0 + pct / 100.0),
                 "apply": True,
+                "is_weighed": self._is_weighed_product(product),
             }))
         return commands
 
@@ -262,41 +295,64 @@ class SalePriceUpdateWizard(models.TransientModel):
                         new_price = line.new_price
                 new_price = currency.round(new_price)
 
-                # Vencer ítems fijos vigentes para este producto en esta lista
+                # Vencer TODOS los ítems vigentes a nivel variante para este
+                # producto en esta lista (fijos, fórmulas, por peso):
+                # - Ítems que arrancan en date_start o después → se eliminan
+                #   (quedarían con vigencia imposible).
+                # - El resto → date_end = día anterior a la nueva vigencia.
                 existing = PricelistItem.search([
                     ("pricelist_id", "=", pricelist.id),
+                    ("applied_on", "=", "0_product_variant"),
                     ("product_id", "=", line.product_id.id),
-                    ("compute_price", "=", "fixed"),
                     "|", ("date_end", "=", False), ("date_end", ">=", date_start),
                 ])
                 for item in existing:
                     item_start = item.date_start
                     if item_start and hasattr(item_start, "date"):
                         item_start = item_start.date()
-                    if item_start and item_start >= date_end_prev:
+                    if item_start and item_start >= date_start:
                         item.unlink()
                     else:
                         item.write({"date_end": date_end_prev})
 
-                note = "Aumento %.2f%% | Anterior: %.2f %s | Nuevo: %.2f %s | Lista: %s" % (
+                is_weighed = self._is_weighed_product(line.product_id)
+                uom_suffix = ""
+                if is_weighed:
+                    weighing_uom = getattr(line.product_id, "weighing_uom_id", False)
+                    uom_suffix = " / %s" % (
+                        weighing_uom.name if weighing_uom else "kg"
+                    )
+
+                note = "Aumento %.2f%% | Anterior: %.2f %s%s | Nuevo: %.2f %s%s | Lista: %s" % (
                     effective_pct,
                     old_price,
                     currency.name,
+                    uom_suffix,
                     new_price,
                     currency.name,
+                    uom_suffix,
                     pricelist.name,
                 )
 
-                PricelistItem.create({
+                item_vals = {
                     "pricelist_id": pricelist.id,
                     "product_id": line.product_id.id,
                     "applied_on": "0_product_variant",
                     "compute_price": "fixed",
-                    "fixed_price": new_price,
                     "date_start": date_start,
                     "date_end": False,
                     "sale_price_update_note": note,
-                })
+                }
+                if is_weighed:
+                    # sale_stock_weighing: el precio va en price_per_weight
+                    item_vals.update({
+                        "is_weighed_price": True,
+                        "price_per_weight": new_price,
+                        "fixed_price": 0.0,
+                    })
+                else:
+                    item_vals["fixed_price"] = new_price
+                PricelistItem.create(item_vals)
 
                 History.create({
                     "pricelist_id": pricelist.id,
@@ -339,6 +395,11 @@ class SalePriceUpdateWizardLine(models.TransientModel):
     apply = fields.Boolean("Aplicar", default=True)
     product_id = fields.Many2one("product.product", string="Producto", readonly=True)
     categ_id = fields.Many2one("product.category", string="Categoría", readonly=True)
+    is_weighed = fields.Boolean(
+        "Por Peso", readonly=True,
+        help="Producto pesable (sale_stock_weighing): el precio es por unidad "
+             "de peso ($/kg) y se aplica como precio por peso en la lista.",
+    )
     currency_id = fields.Many2one(
         "res.currency",
         compute="_compute_currency_id",
