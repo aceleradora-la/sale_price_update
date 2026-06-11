@@ -49,21 +49,19 @@ export class CategoryTreeWidget extends Component {
                 { order: "name" }
             );
 
-            // 2. Conteo de productos activos y vendibles por categoría
-            // En Odoo 19 fields debe estar vacío (el groupby no necesita agregado).
-            // El conteo viene en g.__count (Odoo 17+) o g.categ_id_count (legacy).
-            const groupResult = await this.orm.webReadGroup(
+            // 2. Conteo de productos activos y vendibles por categoría.
+            // searchRead + conteo en cliente: funciona igual en Odoo 17/18/19
+            // (la firma de webReadGroup cambió entre versiones).
+            const products = await this.orm.searchRead(
                 "product.product",
                 [["active", "=", true], ["sale_ok", "=", true]],
-                [],            // sin fields extra — solo el groupby
-                ["categ_id"],
-                { limit: false }
+                ["categ_id"]
             );
             const directCount = {};
-            const rawGroups = groupResult.groups || groupResult;
-            for (const g of rawGroups) {
-                if (g.categ_id) {
-                    directCount[g.categ_id[0]] = g.__count ?? g.categ_id_count ?? 0;
+            for (const p of products) {
+                if (p.categ_id) {
+                    const cid = p.categ_id[0];
+                    directCount[cid] = (directCount[cid] || 0) + 1;
                 }
             }
 
