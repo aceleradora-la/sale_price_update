@@ -43,7 +43,7 @@
                         <!-- ── Pestaña Precios ── -->
                         <page string="Precios" name="prices">
                             <field name="line_ids" nolabel="1">
-                                <list string="Precios" create="false" delete="false">
+                                <tree string="Precios" create="false" delete="false">
                                     <field name="categ_id" string="Categoría" readonly="1" force_save="1"/>
                                     <field name="product_id" string="Producto" readonly="1" force_save="1"/>
                                     <field name="currency_id" column_invisible="1"/>
@@ -53,7 +53,7 @@
                                         force_save="1" optional="show"/>
                                     <field name="weighing_uom_name" string="UdM" readonly="1"
                                         force_save="1" optional="hide"/>
-                                </list>
+                                </tree>
                             </field>
                         </page>
 
@@ -64,12 +64,12 @@
                                 Quitá de la lista los que no deban recibir el reporte.
                             </p>
                             <field name="partner_ids" nolabel="1">
-                                <list string="Clientes" create="false">
+                                <tree string="Clientes" create="false">
                                     <field name="name"/>
                                     <field name="email"/>
                                     <field name="phone" optional="show"/>
                                     <field name="city" optional="show"/>
-                                </list>
+                                </tree>
                             </field>
                         </page>
                     </notebook>
