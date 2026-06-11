@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from odoo import _, api, fields, models
+from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -50,13 +50,6 @@ class SalePriceUpdateWizard(models.TransientModel):
         string="Productos",
     )
 
-    # ── Pricelist detalle (preview por lista) ─────────────────────────
-    pricelist_preview_ids = fields.One2many(
-        "sale.price.update.wizard.pricelist",
-        "wizard_id",
-        string="Preview por Lista",
-    )
-
     # ── Helpers computados ────────────────────────────────────────────
     line_count = fields.Integer("Productos cargados", compute="_compute_line_count")
     selected_count = fields.Integer("Seleccionados", compute="_compute_line_count")
@@ -67,65 +60,33 @@ class SalePriceUpdateWizard(models.TransientModel):
             wiz.line_count = len(wiz.line_ids)
             wiz.selected_count = len(wiz.line_ids.filtered("apply"))
 
-    # ── Carga de productos ────────────────────────────────────────────
-    def action_load_products(self):
-        """Carga/recarga los productos según el filtro de categoría activo."""
-        self.ensure_one()
-        domain = [
-            ("sale_ok", "=", True),
-            ("active", "=", True),
-        ]
-        if self.filter_categ_id:
-            categ_ids = self._get_categ_and_children(self.filter_categ_id)
-            domain.append(("categ_id", "in", categ_ids))
-
-        # Contexto: si el wizard fue abierto con productos preseleccionados
+    # ── Construcción de líneas (compartido por onchange y botón) ──────
+    def _get_products_domain(self):
+        """Dominio de productos según filtro de categoría y contexto."""
+        # Si el wizard fue abierto con productos preseleccionados desde la
+        # lista de productos, ese conjunto manda.
         active_ids = self.env.context.get("active_ids") or []
         active_model = self.env.context.get("active_model") or ""
         if active_ids and active_model == "product.product":
             domain = [("id", "in", active_ids)]
-        elif active_ids and active_model == "product.template":
-            products = self.env["product.product"].search([
-                ("product_tmpl_id", "in", active_ids),
-                ("active", "=", True),
-            ])
-            domain = [("id", "in", products.ids)]
+            if self.filter_categ_id:
+                domain.append(("categ_id", "child_of", self.filter_categ_id.id))
+            return domain
+        if active_ids and active_model == "product.template":
+            domain = [("product_tmpl_id", "in", active_ids), ("active", "=", True)]
+            if self.filter_categ_id:
+                domain.append(("categ_id", "child_of", self.filter_categ_id.id))
+            return domain
 
-        products = self.env["product.product"].search(domain, order="categ_id, name")
-
-        # Obtener precio actual de la primera lista seleccionada (referencia)
-        ref_pricelist = self.pricelist_ids[:1]
-
-        lines_vals = []
-        for product in products:
-            current_price = self._get_current_pricelist_price(product, ref_pricelist)
-            lines_vals.append({
-                "wizard_id": self.id,
-                "product_id": product.id,
-                "categ_id": product.categ_id.id,
-                "current_price": current_price,
-                "increase_percent": 0.0,
-                "apply": True,
-            })
-
-        self.line_ids.unlink()
-        if lines_vals:
-            self.env["sale.price.update.wizard.line"].create(lines_vals)
-
-        return self._reopen()
-
-    def _get_categ_and_children(self, categ):
-        """Retorna IDs de la categoría y todas sus subcategorías recursivamente."""
-        result = categ.ids
-        children = self.env["product.category"].search([("parent_id", "child_of", categ.id)])
-        result += children.ids
-        return list(set(result))
+        domain = [("sale_ok", "=", True), ("active", "=", True)]
+        if self.filter_categ_id:
+            domain.append(("categ_id", "child_of", self.filter_categ_id.id))
+        return domain
 
     def _get_current_pricelist_price(self, product, pricelist):
         """Obtiene el precio vigente del producto en la lista dada."""
         if not pricelist:
             return product.lst_price
-        # Buscar ítem fixed vigente
         today = fields.Date.today()
         item = self.env["product.pricelist.item"].search([
             ("pricelist_id", "=", pricelist.id),
@@ -138,28 +99,49 @@ class SalePriceUpdateWizard(models.TransientModel):
             return item.fixed_price
         return product.lst_price
 
-    # ── Propagación del % global ──────────────────────────────────────
+    def _build_line_commands(self):
+        """Arma los comandos One2many para recrear las líneas en memoria.
+
+        No escribe en la base: apto para usarse dentro de @api.onchange.
+        """
+        products = self.env["product.product"].search(
+            self._get_products_domain(), order="categ_id, default_code, name"
+        )
+        ref_pricelist = self.pricelist_ids[:1]
+        pct = self.increase_percent or 0.0
+
+        commands = [Command.clear()]
+        for product in products:
+            current_price = self._get_current_pricelist_price(product, ref_pricelist)
+            commands.append(Command.create({
+                "product_id": product.id,
+                "categ_id": product.categ_id.id,
+                "current_price": current_price,
+                "increase_percent": 0.0,
+                "new_price": current_price * (1.0 + pct / 100.0),
+                "apply": True,
+            }))
+        return commands
+
+    # ── Onchanges: solo memoria, nunca create/unlink reales ──────────
+    @api.onchange("pricelist_ids", "filter_categ_id")
+    def _onchange_reload_lines(self):
+        """Recarga las líneas cuando cambia la lista de referencia o el filtro."""
+        if self.pricelist_ids:
+            self.line_ids = self._build_line_commands()
+        else:
+            self.line_ids = [Command.clear()]
+
     @api.onchange("increase_percent")
     def _onchange_increase_percent(self):
-        for line in self.line_ids.filtered("apply"):
-            if not line.increase_percent:
-                line._recompute_new_price(self.increase_percent)
-
-    @api.onchange("filter_categ_id")
-    def _onchange_filter_categ_id(self):
-        if self.pricelist_ids:
-            return self.action_load_products()
-
-    @api.onchange("pricelist_ids")
-    def _onchange_pricelist_ids(self):
-        if self.pricelist_ids and not self.line_ids:
-            return self.action_load_products()
-        # Recalcular precio actual con la nueva lista de referencia
-        ref_pricelist = self.pricelist_ids[:1]
+        """Propaga el % global a las líneas sin % propio."""
         for line in self.line_ids:
-            line.current_price = self._get_current_pricelist_price(line.product_id, ref_pricelist)
-            line._recompute_new_price(line.increase_percent or self.increase_percent)
+            if not line.increase_percent:
+                line.new_price = line.current_price * (
+                    1.0 + (self.increase_percent or 0.0) / 100.0
+                )
 
+    # ── Botones auxiliares ────────────────────────────────────────────
     def _reopen(self):
         return {
             "type": "ir.actions.act_window",
@@ -170,7 +152,13 @@ class SalePriceUpdateWizard(models.TransientModel):
             "context": self.env.context,
         }
 
-    # ── Selección masiva ──────────────────────────────────────────────
+    def action_load_products(self):
+        """Recarga las líneas (botón, opera sobre registro real)."""
+        self.ensure_one()
+        self.line_ids.unlink()
+        self.write({"line_ids": self._build_line_commands()[1:]})  # sin el clear
+        return self._reopen()
+
     def action_select_all(self):
         self.line_ids.write({"apply": True})
         return self._reopen()
@@ -179,7 +167,6 @@ class SalePriceUpdateWizard(models.TransientModel):
         self.line_ids.write({"apply": False})
         return self._reopen()
 
-    # ── Historial ─────────────────────────────────────────────────────
     def action_view_history(self):
         return {
             "name": _("Historial de Actualización de Precios"),
@@ -202,7 +189,9 @@ class SalePriceUpdateWizard(models.TransientModel):
             raise UserError(_("No hay productos seleccionados con precio calculado."))
 
         PricelistItem = self.env["product.pricelist.item"]
-        History = self.env["sale.price.update.history"]
+        # sudo: el vendedor tiene solo lectura sobre el historial, pero el
+        # registro de auditoría debe crearse siempre.
+        History = self.env["sale.price.update.history"].sudo()
         date_start = self.price_date_start
         date_end_prev = date_start - timedelta(days=1)
 
@@ -212,7 +201,7 @@ class SalePriceUpdateWizard(models.TransientModel):
             for line in lines_to_apply:
                 pct = line.increase_percent if line.increase_percent else self.increase_percent
 
-                # Vencer ítems vigentes existentes
+                # Vencer ítems fijos vigentes para este producto en esta lista
                 existing = PricelistItem.search([
                     ("pricelist_id", "=", pricelist.id),
                     ("product_id", "=", line.product_id.id),
@@ -221,6 +210,8 @@ class SalePriceUpdateWizard(models.TransientModel):
                 ])
                 for item in existing:
                     item_start = item.date_start
+                    if item_start and hasattr(item_start, "date"):
+                        item_start = item_start.date()
                     if item_start and item_start >= date_end_prev:
                         item.unlink()
                     else:
@@ -243,6 +234,7 @@ class SalePriceUpdateWizard(models.TransientModel):
                     "fixed_price": line.new_price,
                     "date_start": date_start,
                     "date_end": False,
+                    "sale_price_update_note": note,
                 })
 
                 History.create({
@@ -306,26 +298,29 @@ class SalePriceUpdateWizardLine(models.TransientModel):
         "Diferencia",
         currency_field="currency_id",
         compute="_compute_diff",
-        store=True,
     )
     diff_percent_display = fields.Char(
         "Δ%",
         compute="_compute_diff",
-        store=True,
     )
 
     @api.depends("wizard_id.pricelist_ids")
     def _compute_currency_id(self):
         for line in self:
             pricelist = line.wizard_id.pricelist_ids[:1]
-            line.currency_id = pricelist.currency_id if pricelist else self.env.company.currency_id
+            line.currency_id = (
+                pricelist.currency_id if pricelist else self.env.company.currency_id
+            )
 
     @api.depends("new_price", "current_price")
     def _compute_diff(self):
         for line in self:
-            line.diff_amount = line.new_price - line.current_price
+            line.diff_amount = (line.new_price or 0.0) - (line.current_price or 0.0)
             if line.current_price:
-                pct = (line.new_price - line.current_price) / line.current_price * 100
+                pct = (
+                    ((line.new_price or 0.0) - line.current_price)
+                    / line.current_price * 100
+                )
                 line.diff_percent_display = "%+.2f%%" % pct
             else:
                 line.diff_percent_display = "—"
@@ -333,23 +328,5 @@ class SalePriceUpdateWizardLine(models.TransientModel):
     @api.onchange("increase_percent")
     def _onchange_increase_percent(self):
         for line in self:
-            pct = line.increase_percent or line.wizard_id.increase_percent
-            line.new_price = line.current_price * (1.0 + pct / 100.0)
-
-    def _recompute_new_price(self, pct):
-        self.new_price = self.current_price * (1.0 + pct / 100.0)
-
-
-class SalePriceUpdateWizardPricelist(models.TransientModel):
-    """Preview de precio nuevo por lista de precios (uso informativo)."""
-
-    _name = "sale.price.update.wizard.pricelist"
-    _description = "Preview por Lista — Asistente Actualización de Precios"
-    _order = "pricelist_id, product_id"
-
-    wizard_id = fields.Many2one("sale.price.update.wizard", ondelete="cascade")
-    pricelist_id = fields.Many2one("product.pricelist", string="Lista", readonly=True)
-    product_id = fields.Many2one("product.product", string="Producto", readonly=True)
-    currency_id = fields.Many2one("res.currency", related="pricelist_id.currency_id")
-    current_price = fields.Monetary("Precio Actual", currency_field="currency_id", readonly=True)
-    new_price = fields.Monetary("Precio Nuevo", currency_field="currency_id", readonly=True)
+            pct = line.increase_percent or line.wizard_id.increase_percent or 0.0
+            line.new_price = (line.current_price or 0.0) * (1.0 + pct / 100.0)
