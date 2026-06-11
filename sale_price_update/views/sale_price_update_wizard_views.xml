@@ -85,11 +85,12 @@
                                     decoration-muted="not apply">
                                     <field name="apply" widget="boolean_toggle" string="✓"/>
                                     <field name="categ_id" string="Categoría"
-                                        optional="show" readonly="1"/>
-                                    <field name="product_id" string="Producto" readonly="1"/>
+                                        optional="show" readonly="1" force_save="1"/>
+                                    <field name="product_id" string="Producto"
+                                        readonly="1" force_save="1"/>
                                     <field name="currency_id" column_invisible="1"/>
                                     <field name="current_price" string="Precio Actual"
-                                        readonly="1" class="text-end"/>
+                                        readonly="1" force_save="1" class="text-end"/>
                                     <field name="increase_percent" string="% Aumento"
                                         class="text-end"/>
                                     <field name="new_price" string="Precio Nuevo"

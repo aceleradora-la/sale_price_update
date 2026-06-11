@@ -204,9 +204,16 @@ class SalePriceUpdateWizard(models.TransientModel):
         if not self.price_date_start:
             raise UserError(_("Indicá la fecha de vigencia."))
 
-        lines_to_apply = self.line_ids.filtered(lambda l: l.apply and l.new_price > 0)
+        lines_to_apply = self.line_ids.filtered(
+            lambda l: l.apply and l.product_id and l.new_price > 0
+        )
         if not lines_to_apply:
             raise UserError(_("No hay productos seleccionados con precio calculado."))
+        if self.line_ids.filtered(lambda l: l.apply and not l.product_id):
+            raise UserError(_(
+                "Hay líneas sin producto (posible problema al guardar el wizard). "
+                "Cerrá el asistente y volvé a abrirlo."
+            ))
 
         PricelistItem = self.env["product.pricelist.item"]
         # sudo: el vendedor tiene solo lectura sobre el historial, pero el
