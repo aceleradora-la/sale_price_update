@@ -60,9 +60,10 @@
                 <field name="pricelist_id"/>
                 <field name="categ_id"/>
                 <field name="user_id"/>
-                <filter string="Hoy" name="today" domain="[('date_applied','=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="Hoy" name="today"
+                    domain="[('date_applied','=', context_today().strftime('%Y-%m-%d'))]"/>
                 <filter string="Este mes" name="this_month"
-                    domain="[('date_applied','&gt;=', (context_today() + relativedelta(day=1)).strftime('%Y-%m-%d'))]"/>
+                    domain="[('date_applied','&gt;=', context_today().strftime('%Y-%m-01'))]"/>
                 <group expand="0" string="Agrupar por">
                     <filter string="Lista de Precios" name="group_pricelist" context="{'group_by': 'pricelist_id'}"/>
                     <filter string="Categoría" name="group_categ" context="{'group_by': 'categ_id'}"/>
