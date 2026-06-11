@@ -84,20 +84,19 @@ class SalePriceUpdateWizard(models.TransientModel):
         return domain
 
     def _get_current_pricelist_price(self, product, pricelist):
-        """Obtiene el precio vigente del producto en la lista dada."""
+        """Precio vigente del producto en la lista, usando el motor de precios.
+
+        _get_product_price resuelve cualquier tipo de regla (fija, fórmula,
+        descuento, por plantilla o categoría), no solo ítems fijos por variante.
+        """
         if not pricelist:
             return product.lst_price
-        today = fields.Date.today()
-        item = self.env["product.pricelist.item"].search([
-            ("pricelist_id", "=", pricelist.id),
-            ("product_id", "=", product.id),
-            ("compute_price", "=", "fixed"),
-            "|", ("date_start", "=", False), ("date_start", "<=", today),
-            "|", ("date_end", "=", False), ("date_end", ">=", today),
-        ], limit=1, order="date_start desc")
-        if item:
-            return item.fixed_price
-        return product.lst_price
+        try:
+            return pricelist._get_product_price(
+                product, 1.0, date=fields.Date.today()
+            )
+        except Exception:
+            return product.lst_price
 
     def _build_line_commands(self):
         """Arma los comandos One2many para recrear las líneas en memoria.
@@ -195,11 +194,38 @@ class SalePriceUpdateWizard(models.TransientModel):
         date_start = self.price_date_start
         date_end_prev = date_start - timedelta(days=1)
 
+        ref_pricelist = self.pricelist_ids[:1]
         applied_count = 0
         for pricelist in self.pricelist_ids:
             currency = pricelist.currency_id
             for line in lines_to_apply:
-                pct = line.increase_percent if line.increase_percent else self.increase_percent
+                # % efectivo de la línea: si el usuario editó el precio nuevo
+                # a mano, se deriva del cambio real; si no, el % cargado.
+                if line.current_price:
+                    effective_pct = (
+                        line.new_price / line.current_price - 1.0
+                    ) * 100.0
+                else:
+                    effective_pct = (
+                        line.increase_percent or self.increase_percent or 0.0
+                    )
+
+                # Cada lista parte de SU propio precio vigente (puede diferir
+                # en moneda y valor de la lista de referencia que se muestra
+                # en pantalla). A la lista de referencia se le aplica el precio
+                # tal cual fue previsualizado.
+                if pricelist == ref_pricelist:
+                    old_price = line.current_price
+                    new_price = line.new_price
+                else:
+                    old_price = self._get_current_pricelist_price(
+                        line.product_id, pricelist
+                    )
+                    if old_price:
+                        new_price = old_price * (1.0 + effective_pct / 100.0)
+                    else:
+                        new_price = line.new_price
+                new_price = currency.round(new_price)
 
                 # Vencer ítems fijos vigentes para este producto en esta lista
                 existing = PricelistItem.search([
@@ -218,10 +244,10 @@ class SalePriceUpdateWizard(models.TransientModel):
                         item.write({"date_end": date_end_prev})
 
                 note = "Aumento %.2f%% | Anterior: %.2f %s | Nuevo: %.2f %s | Lista: %s" % (
-                    pct,
-                    line.current_price,
+                    effective_pct,
+                    old_price,
                     currency.name,
-                    line.new_price,
+                    new_price,
                     currency.name,
                     pricelist.name,
                 )
@@ -231,7 +257,7 @@ class SalePriceUpdateWizard(models.TransientModel):
                     "product_id": line.product_id.id,
                     "applied_on": "0_product_variant",
                     "compute_price": "fixed",
-                    "fixed_price": line.new_price,
+                    "fixed_price": new_price,
                     "date_start": date_start,
                     "date_end": False,
                     "sale_price_update_note": note,
@@ -243,9 +269,9 @@ class SalePriceUpdateWizard(models.TransientModel):
                     "categ_id": line.categ_id.id,
                     "date_applied": date_start,
                     "currency_id": currency.id,
-                    "old_price": line.current_price,
-                    "increase_percent": pct,
-                    "new_price": line.new_price,
+                    "old_price": old_price,
+                    "increase_percent": effective_pct,
+                    "new_price": new_price,
                     "user_id": self.env.uid,
                     "note": note,
                 })
