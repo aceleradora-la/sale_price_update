@@ -50,14 +50,17 @@ export class CategoryTreeWidget extends Component {
             );
 
             // 2. Conteo de productos activos y vendibles por categoría
-            const groups = await this.orm.readGroup(
+            // webReadGroup es la API correcta en Odoo 17+
+            const groupResult = await this.orm.webReadGroup(
                 "product.product",
                 [["active", "=", true], ["sale_ok", "=", true]],
                 ["categ_id"],
-                ["categ_id"]
+                ["categ_id"],
+                {}
             );
             const directCount = {};
-            for (const g of groups) {
+            const rawGroups = groupResult.groups || groupResult;
+            for (const g of rawGroups) {
                 if (g.categ_id) directCount[g.categ_id[0]] = g.categ_id_count;
             }
 
