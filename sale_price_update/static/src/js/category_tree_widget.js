@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart, onWillUpdateProps } from "@odoo/owl";
+import { Component, useState, onWillStart } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
@@ -9,16 +9,16 @@ import { useService } from "@web/core/utils/hooks";
  *
  * Panel lateral de árbol de categorías para el wizard de actualización de precios.
  * Muestra la jerarquía de product.category con conteo de productos, expandible.
- * Al hacer clic en una categoría dispara el onchange del wizard.
+ * Al hacer clic en una categoría escribe el many2one del wizard y dispara
+ * su onchange (que recarga las líneas).
+ *
+ * Field widget estándar Odoo 17/18/19: recibe props { record, name, readonly }.
  */
 export class CategoryTreeWidget extends Component {
     static template = "sale_price_update.CategoryTreeWidget";
-    static props = {
-        value: { optional: true },        // id de la categoría seleccionada (o false)
-        readonly: { type: Boolean, optional: true },
-        update: Function,                  // callback para actualizar el campo
-        record: { optional: true },
-    };
+    // Los field widgets reciben más props de las que usamos (record, name,
+    // readonly, id, etc.). Validación laxa para compatibilidad 17/18/19.
+    static props = ["*"];
 
     setup() {
         this.orm = useService("orm");
@@ -29,13 +29,21 @@ export class CategoryTreeWidget extends Component {
         });
 
         onWillStart(() => this._loadTree());
+    }
 
-        // Re-cargar si el record cambia (p.ej. se recarga el wizard)
-        onWillUpdateProps((nextProps) => {
-            if (nextProps.record?.resId !== this.props.record?.resId) {
-                this._loadTree();
-            }
-        });
+    /** Id de la categoría seleccionada según el valor actual del campo. */
+    get selectedId() {
+        const value = this.props.record.data[this.props.name];
+        if (!value) {
+            return false;
+        }
+        if (Array.isArray(value)) {
+            return value[0]; // formato [id, display_name] (Odoo 17/18)
+        }
+        if (typeof value === "object") {
+            return value.id; // formato { id, display_name } (Odoo 19)
+        }
+        return value;
     }
 
     async _loadTree() {
@@ -60,7 +68,7 @@ export class CategoryTreeWidget extends Component {
             const directCount = {};
             for (const p of products) {
                 if (p.categ_id) {
-                    const cid = p.categ_id[0];
+                    const cid = Array.isArray(p.categ_id) ? p.categ_id[0] : p.categ_id.id;
                     directCount[cid] = (directCount[cid] || 0) + 1;
                 }
             }
@@ -68,10 +76,13 @@ export class CategoryTreeWidget extends Component {
             // 3. Construir árbol
             const byId = {};
             for (const cat of categories) {
+                const parentId = cat.parent_id
+                    ? (Array.isArray(cat.parent_id) ? cat.parent_id[0] : cat.parent_id.id)
+                    : null;
                 byId[cat.id] = {
                     id: cat.id,
                     name: cat.name,
-                    parentId: cat.parent_id ? cat.parent_id[0] : null,
+                    parentId,
                     children: [],
                     directCount: directCount[cat.id] || 0,
                     totalCount: 0,
@@ -91,7 +102,7 @@ export class CategoryTreeWidget extends Component {
             // 4. Propagar conteos hacia arriba
             this._propagateCounts(roots);
 
-            // 5. Expandir nodos con hijos por defecto (primer nivel)
+            // 5. Expandir nodos raíz con contenido por defecto
             const expanded = new Set();
             for (const root of roots) {
                 if (root.children.length > 0 && root.totalCount > 0) {
@@ -120,7 +131,7 @@ export class CategoryTreeWidget extends Component {
     }
 
     isSelected(nodeId) {
-        return this.props.value === nodeId;
+        return this.selectedId === nodeId;
     }
 
     toggleExpand(ev, nodeId) {
@@ -132,16 +143,28 @@ export class CategoryTreeWidget extends Component {
         }
     }
 
-    selectCategory(nodeId) {
-        if (this.props.readonly) return;
-        // Toggle: si ya está seleccionada, deseleccionar (volver a "Todos")
-        const newVal = this.isSelected(nodeId) ? false : nodeId;
-        this.props.update(newVal ? [nodeId, ""] : false);
+    async _updateField(value) {
+        // record.update escribe el campo y dispara el onchange del wizard
+        await this.props.record.update({ [this.props.name]: value });
     }
 
-    selectAll() {
-        if (this.props.readonly) return;
-        this.props.update(false);
+    async selectCategory(node) {
+        if (this.props.readonly) {
+            return;
+        }
+        // Toggle: si ya está seleccionada, deseleccionar (volver a "Todos")
+        if (this.isSelected(node.id)) {
+            await this._updateField(false);
+        } else {
+            await this._updateField([node.id, node.name]);
+        }
+    }
+
+    async selectAll() {
+        if (this.props.readonly) {
+            return;
+        }
+        await this._updateField(false);
     }
 }
 
@@ -149,7 +172,4 @@ export class CategoryTreeWidget extends Component {
 registry.category("fields").add("category_tree_widget", {
     component: CategoryTreeWidget,
     supportedTypes: ["many2one"],
-    extractProps({ attrs }) {
-        return {};
-    },
 });

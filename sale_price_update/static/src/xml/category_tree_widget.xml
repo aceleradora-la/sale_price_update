@@ -21,7 +21,7 @@
         <t t-else="">
             <!-- "Todos" -->
             <div t-on-click="() => this.selectAll()"
-                 t-attf-class="o_spu_categ_item o_spu_categ_all {{ !props.value ? 'o_spu_categ_selected' : '' }}">
+                 t-attf-class="o_spu_categ_item o_spu_categ_all {{ !selectedId ? 'o_spu_categ_selected' : '' }}">
                 <span class="o_spu_categ_name">Todos</span>
             </div>
 
@@ -40,7 +40,7 @@
         <!-- Fila del nodo -->
         <div t-attf-class="o_spu_categ_item {{ this.isSelected(node.id) ? 'o_spu_categ_selected' : '' }}"
              t-attf-style="padding-left: {{ 8 + depth * 16 }}px"
-             t-on-click="() => this.selectCategory(node.id)">
+             t-on-click="() => this.selectCategory(node)">
 
             <!-- Chevron expand/collapse -->
             <t t-if="node.children.length > 0">
