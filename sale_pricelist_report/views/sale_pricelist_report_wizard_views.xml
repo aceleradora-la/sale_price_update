@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_sale_pricelist_report_wizard_form" model="ir.ui.view">
+        <field name="name">sale.pricelist.report.wizard.form</field>
+        <field name="model">sale.pricelist.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Reporte de Lista de Precios">
+                <sheet>
+
+                    <!-- ── Encabezado ── -->
+                    <div class="row g-3 align-items-end mb-3"
+                         style="border-bottom: 1px solid var(--o-border-color, #e0e0e0); padding-bottom: 14px;">
+                        <div class="col-lg-4">
+                            <label for="pricelist_id" string="Lista de Precios"/>
+                            <field name="pricelist_id" options="{'no_create': True}"/>
+                        </div>
+                        <div class="col-lg-3">
+                            <label for="date" string="Precios vigentes al"/>
+                            <field name="date"/>
+                        </div>
+                        <div class="col-lg-5">
+                            <label for="filter_categ_id" string="Categoría (opcional)"/>
+                            <field name="filter_categ_id" options="{'no_create': True}"
+                                placeholder="Todas las categorías"/>
+                        </div>
+                    </div>
+
+                    <!-- ── Contadores ── -->
+                    <div class="d-flex gap-3 mb-3">
+                        <span class="badge bg-secondary">
+                            <field name="line_count" nolabel="1"/> productos con precio
+                        </span>
+                        <span class="badge bg-primary">
+                            <field name="partner_count" nolabel="1"/> clientes con esta lista
+                        </span>
+                        <span class="badge bg-warning text-dark">
+                            <field name="partner_no_email_count" nolabel="1"/> sin email
+                        </span>
+                    </div>
+
+                    <notebook>
+                        <!-- ── Pestaña Precios ── -->
+                        <page string="Precios" name="prices">
+                            <field name="line_ids" nolabel="1">
+                                <list string="Precios" create="false" delete="false">
+                                    <field name="categ_id" string="Categoría" readonly="1" force_save="1"/>
+                                    <field name="product_id" string="Producto" readonly="1" force_save="1"/>
+                                    <field name="currency_id" column_invisible="1"/>
+                                    <field name="price" string="Precio" readonly="1" force_save="1"
+                                        class="text-end"/>
+                                    <field name="is_weighed" string="Por Peso" readonly="1"
+                                        force_save="1" optional="show"/>
+                                    <field name="weighing_uom_name" string="UdM" readonly="1"
+                                        force_save="1" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <!-- ── Pestaña Clientes ── -->
+                        <page string="Clientes" name="customers">
+                            <p class="text-muted" style="font-size: 12px;">
+                                Clientes con esta lista de precios asignada en su ficha.
+                                Quitá de la lista los que no deban recibir el reporte.
+                            </p>
+                            <field name="partner_ids" nolabel="1">
+                                <list string="Clientes" create="false">
+                                    <field name="name"/>
+                                    <field name="email"/>
+                                    <field name="phone" optional="show"/>
+                                    <field name="city" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+
+                </sheet>
+                <footer>
+                    <button name="action_print_pdf" type="object"
+                        string="Imprimir PDF" class="btn btn-primary" icon="fa-print"/>
+                    <button name="action_send_emails" type="object"
+                        string="Enviar a Clientes" class="btn btn-primary" icon="fa-envelope"
+                        confirm="Se enviará el PDF de la lista de precios por email a todos los clientes de la pestaña Clientes. ¿Confirmar?"/>
+                    <button string="Cerrar" class="btn btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── Acción ── -->
+    <record id="action_sale_pricelist_report_wizard" model="ir.actions.act_window">
+        <field name="name">Reporte de Lista de Precios</field>
+        <field name="res_model">sale.pricelist.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="view_id" ref="view_sale_pricelist_report_wizard_form"/>
+    </record>
+
+    <!-- ── Menú (bajo el menú raíz de sale_price_update) ── -->
+    <menuitem id="menu_sale_pricelist_report"
+        name="Reporte de Lista de Precios"
+        parent="sale_price_update.menu_sale_price_update_root"
+        action="action_sale_pricelist_report_wizard"
+        sequence="30"/>
+
+</odoo>
