@@ -3,6 +3,7 @@
 import { Component, useState, onWillStart } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
+import { session } from "@web/session";
 
 /**
  * CategoryTreeWidget
@@ -143,6 +144,19 @@ export class CategoryTreeWidget extends Component {
         }
     }
 
+    /** Formato de valor m2o según versión: [id, name] hasta 18, {id, display_name} en 19+. */
+    _m2oValue(id, name) {
+        if (!id) {
+            return false;
+        }
+        const versionInfo = session.server_version_info || [];
+        const major = parseInt(versionInfo[0]) || 0;
+        if (major && major < 19) {
+            return [id, name];
+        }
+        return { id, display_name: name };
+    }
+
     async _updateField(value) {
         // record.update escribe el campo y dispara el onchange del wizard
         await this.props.record.update({ [this.props.name]: value });
@@ -156,7 +170,7 @@ export class CategoryTreeWidget extends Component {
         if (this.isSelected(node.id)) {
             await this._updateField(false);
         } else {
-            await this._updateField([node.id, node.name]);
+            await this._updateField(this._m2oValue(node.id, node.name));
         }
     }
 
