@@ -105,57 +105,17 @@ class SalePriceUpdateWizard(models.TransientModel):
             product, "is_weighed_product", False
         )
 
-    def _get_pricelist_prices(self, products, pricelist):
+    def _get_pricelist_prices(self, products, pricelist, date=None):
         """Precios vigentes de un lote de productos en la lista dada.
 
-        Usa _compute_price_rule (una sola pasada del motor de precios para
-        todos los productos) en vez de resolver producto por producto.
-        Resuelve cualquier tipo de regla: fija, fórmula, descuento, por
-        plantilla o categoría. Devuelve {product_id: precio}.
-
-        Los productos pesables (sale_stock_weighing) se resuelven vía
-        _get_product_price, que ese módulo sobreescribe para devolver el
-        precio por unidad de peso ($/kg).
+        Delegado en product.pricelist._spu_get_prices (compartido con otros
+        módulos del repo). Devuelve {product_id: precio}.
         """
         if not products:
             return {}
         if not pricelist:
             return {p.id: p.lst_price for p in products}
-
-        prices = {}
-
-        # Productos pesables: el override de sale_stock_weighing vive en
-        # _get_product_price, no en _compute_price_rule.
-        weighed = products.browse()
-        if self._weighing_enabled():
-            weighed = products.filtered(
-                lambda p: getattr(p, "is_weighed_product", False)
-            )
-            for product in weighed:
-                try:
-                    prices[product.id] = pricelist._get_product_price(
-                        product, 1.0, date=fields.Date.today()
-                    )
-                except Exception:
-                    prices[product.id] = product.lst_price
-
-        normal = products - weighed
-        if normal:
-            try:
-                rules = pricelist._compute_price_rule(
-                    normal, 1.0, date=fields.Date.today()
-                )
-                prices.update({pid: price for pid, (price, _rule) in rules.items()})
-            except Exception:
-                # Fallback defensivo ante cambios de firma entre versiones
-                for product in normal:
-                    try:
-                        prices[product.id] = pricelist._get_product_price(
-                            product, 1.0, date=fields.Date.today()
-                        )
-                    except Exception:
-                        prices[product.id] = product.lst_price
-        return prices
+        return pricelist._spu_get_prices(products, date=date)
 
     def _get_current_pricelist_price(self, product, pricelist):
         """Precio vigente de un solo producto (wrapper del batch)."""

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Acción de reporte ── -->
+    <record id="action_report_pricelist" model="ir.actions.report">
+        <field name="name">Lista de Precios</field>
+        <field name="model">sale.pricelist.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">sale_pricelist_report.report_pricelist</field>
+        <field name="report_file">sale_pricelist_report.report_pricelist</field>
+        <field name="print_report_name">'Lista de Precios - %s' % (object.pricelist_id.name)</field>
+    </record>
+
+    <!-- ── Template QWeb ── -->
+    <template id="report_pricelist">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="web.external_layout">
+                    <div class="page">
+
+                        <!-- Encabezado -->
+                        <div class="row mb-3" style="border-bottom: 3px solid #12488a; padding-bottom: 8px;">
+                            <div class="col-7">
+                                <h2 style="color:#12488a; margin-bottom:2px;">Lista de Precios</h2>
+                                <h4 style="color:#555; font-weight:normal; margin:0;">
+                                    <span t-esc="doc.pricelist_id.name"/>
+                                </h4>
+                            </div>
+                            <div class="col-5 text-end">
+                                <p style="margin:0; font-size:13px; color:#555;">
+                                    Vigencia: <strong t-esc="doc.date" t-options='{"widget": "date"}'/><br/>
+                                    Moneda: <strong t-esc="doc.pricelist_id.currency_id.name"/>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Grupos por categoría -->
+                        <t t-foreach="doc._get_report_groups()" t-as="group">
+                            <div style="background:#12488a; color:white; font-weight:bold;
+                                        padding: 4px 10px; border-radius: 3px;
+                                        margin-top: 14px; margin-bottom: 4px;
+                                        page-break-after: avoid; font-size: 12px;">
+                                <span t-esc="group['name']"/>
+                            </div>
+                            <table class="table table-sm" style="font-size:11px;">
+                                <tbody>
+                                    <tr t-foreach="group['lines']" t-as="line">
+                                        <td style="border-bottom: 1px solid #e2e8f0; padding: 3px 8px;">
+                                            <span t-esc="line['name']"/>
+                                        </td>
+                                        <td class="text-end" style="border-bottom: 1px solid #e2e8f0;
+                                                   padding: 3px 8px; font-weight: 600; width: 30%;">
+                                            <span t-esc="line['price']"
+                                                t-options='{"widget": "monetary", "display_currency": doc.pricelist_id.currency_id}'/>
+                                            <span t-esc="line['uom_suffix']"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </t>
+
+                        <!-- Pie -->
+                        <p style="margin-top: 16px; font-size: 9px; color: #94a3b8;
+                                  border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                            Precios vigentes desde el
+                            <span t-esc="doc.date" t-options='{"widget": "date"}'/>
+                            · Sujetos a cambio sin previo aviso.
+                        </p>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>
