@@ -94,16 +94,47 @@ class SalePricelistReportWizard(models.TransientModel):
     def _onchange_reload_lines(self):
         self.line_ids = self._build_line_commands()
 
+    def _get_pricelist_partners(self, pricelist):
+        """Clientes (contactos raíz) con la lista de precios asignada.
+
+        En Odoo ≤18 property_product_pricelist es buscable directamente.
+        En Odoo 19 es un computado no almacenado: el dato real está en
+        specific_property_product_pricelist. Último recurso: filtrado en
+        Python sobre los contactos raíz.
+        """
+        Partner = self.env["res.partner"]
+        base_domain = [("parent_id", "=", False)]
+
+        prop_field = Partner._fields.get("property_product_pricelist")
+        if prop_field is not None and prop_field.store:
+            return Partner.search(
+                base_domain
+                + [("property_product_pricelist", "=", pricelist.id)]
+            )
+        if "specific_property_product_pricelist" in Partner._fields:
+            return Partner.search(
+                base_domain
+                + [("specific_property_product_pricelist", "=", pricelist.id)]
+            )
+        # Fallback: evaluar el computado en Python
+        candidates = Partner.search(base_domain)
+        return candidates.filtered(
+            lambda p: p.property_product_pricelist.id == pricelist.id
+        )
+
     @api.onchange("pricelist_id")
     def _onchange_pricelist_partners(self):
         """Precarga los clientes que tienen asignada esta lista de precios."""
         if not self.pricelist_id:
             self.partner_ids = [Command.clear()]
             return
-        partners = self.env["res.partner"].search([
-            ("property_product_pricelist", "=", self.pricelist_id.id),
-            ("parent_id", "=", False),
-        ])
+        # _origin: en onchange pricelist_id es NewId; para search hace falta
+        # el id real del registro subyacente.
+        pricelist = self.pricelist_id._origin or self.pricelist_id
+        if not pricelist.id:
+            self.partner_ids = [Command.clear()]
+            return
+        partners = self._get_pricelist_partners(pricelist)
         self.partner_ids = [Command.set(partners.ids)]
 
     # ── Reporte para el PDF (recomputa server-side, no depende de UI) ──
