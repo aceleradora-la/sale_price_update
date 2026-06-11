@@ -1,0 +1,96 @@
+// ── Category Tree Widget ────────────────────────────────────────────────────
+
+.o_spu_categ_tree {
+    user-select: none;
+    font-size: 13px;
+}
+
+.o_spu_categ_header {
+    letter-spacing: 0.06em;
+}
+
+.o_spu_categ_item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--o-body-color, #555);
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+    overflow: hidden;
+
+    &:hover {
+        background: var(--o-action-active-bg, rgba(0, 0, 0, 0.06));
+        color: var(--o-action-color, #017e84);
+    }
+
+    &.o_spu_categ_selected {
+        background: var(--o-brand-primary-opacity-10, rgba(1, 126, 132, 0.12));
+        color: var(--o-brand-primary, #017e84);
+        font-weight: 600;
+    }
+
+    &.o_spu_categ_all {
+        font-weight: 600;
+        color: var(--o-body-color, #555);
+    }
+}
+
+.o_spu_categ_chevron {
+    flex-shrink: 0;
+    width: 16px;
+    color: var(--o-gray-500, #aaa);
+    font-size: 10px;
+    cursor: pointer;
+
+    &:hover {
+        color: var(--o-brand-primary, #017e84);
+    }
+
+    &.o_spu_categ_chevron_leaf {
+        cursor: default;
+        &:hover { color: var(--o-gray-500, #aaa); }
+    }
+}
+
+.o_spu_categ_name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_spu_categ_count {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--o-gray-500, #999);
+    background: var(--o-gray-100, #f0f0f0);
+    border-radius: 10px;
+    padding: 1px 6px;
+    min-width: 24px;
+    text-align: center;
+
+    .o_spu_categ_selected & {
+        background: var(--o-brand-primary-opacity-10, rgba(1, 126, 132, 0.12));
+        color: var(--o-brand-primary, #017e84);
+    }
+}
+
+.o_spu_categ_loading {
+    padding-left: 8px;
+}
+
+// ── Wizard layout ────────────────────────────────────────────────────────────
+
+.o_sale_price_update_header {
+    border-bottom: 1px solid var(--o-border-color, #e0e0e0);
+    padding-bottom: 16px;
+    margin-bottom: 16px !important;
+}
+
+// Tabla: precio nuevo en verde cuando sube
+.o_field_color_success {
+    color: var(--o-success, #28a745);
+    font-weight: 600;
+}

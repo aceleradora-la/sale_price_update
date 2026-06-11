@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+<t t-name="sale_price_update.CategoryTreeWidget">
+    <div class="o_spu_categ_tree">
+
+        <!-- Header -->
+        <div class="o_spu_categ_header d-flex align-items-center gap-1 mb-2">
+            <i class="fa fa-filter text-muted"/>
+            <span class="fw-bold text-muted small text-uppercase">Categoría</span>
+        </div>
+
+        <!-- Loading -->
+        <t t-if="state.loading">
+            <div class="o_spu_categ_loading text-muted small py-2 ps-1">
+                <i class="fa fa-spinner fa-spin me-1"/>Cargando…
+            </div>
+        </t>
+
+        <!-- Árbol -->
+        <t t-else="">
+            <!-- "Todos" -->
+            <div t-on-click="() => this.selectAll()"
+                 t-attf-class="o_spu_categ_item o_spu_categ_all {{ !props.value ? 'o_spu_categ_selected' : '' }}">
+                <span class="o_spu_categ_name">Todos</span>
+            </div>
+
+            <!-- Nodos recursivos -->
+            <t t-foreach="state.nodes" t-as="node" t-key="node.id">
+                <t t-call="sale_price_update.CategoryTreeNode">
+                    <t t-set="depth" t-value="0"/>
+                </t>
+            </t>
+        </t>
+    </div>
+</t>
+
+<t t-name="sale_price_update.CategoryTreeNode">
+    <div class="o_spu_categ_node">
+        <!-- Fila del nodo -->
+        <div t-attf-class="o_spu_categ_item {{ this.isSelected(node.id) ? 'o_spu_categ_selected' : '' }}"
+             t-attf-style="padding-left: {{ 8 + depth * 16 }}px"
+             t-on-click="() => this.selectCategory(node.id)">
+
+            <!-- Chevron expand/collapse -->
+            <t t-if="node.children.length > 0">
+                <span class="o_spu_categ_chevron"
+                      t-on-click.stop="(ev) => this.toggleExpand(ev, node.id)">
+                    <i t-attf-class="fa fa-fw {{ this.isExpanded(node.id) ? 'fa-chevron-down' : 'fa-chevron-right' }}"/>
+                </span>
+            </t>
+            <t t-else="">
+                <span class="o_spu_categ_chevron o_spu_categ_chevron_leaf">
+                    <i class="fa fa-fw fa-circle" style="font-size:5px;vertical-align:middle;opacity:0.35"/>
+                </span>
+            </t>
+
+            <span class="o_spu_categ_name" t-esc="node.name"/>
+            <span class="o_spu_categ_count" t-esc="node.totalCount"/>
+        </div>
+
+        <!-- Hijos (si expandido) -->
+        <t t-if="node.children.length > 0 and this.isExpanded(node.id)">
+            <t t-foreach="node.children" t-as="node" t-key="node.id">
+                <t t-call="sale_price_update.CategoryTreeNode">
+                    <t t-set="depth" t-value="depth + 1"/>
+                </t>
+            </t>
+        </t>
+    </div>
+</t>
+
+</templates>

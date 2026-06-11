@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_sale_price_update_wizard_form" model="ir.ui.view">
+        <field name="name">sale.price.update.wizard.form</field>
+        <field name="model">sale.price.update.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Actualizar Precios de Venta">
+                <sheet>
+
+                    <!-- ── Encabezado ── -->
+                    <div class="o_sale_price_update_header">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-5">
+                                <label for="pricelist_ids" string="Listas de Precios"/>
+                                <field name="pricelist_ids" widget="many2many_tags"
+                                    options="{'no_create': True}"
+                                    placeholder="Seleccioná una o más listas de precios…"/>
+                            </div>
+                            <div class="col-lg-2">
+                                <label for="increase_percent" string="% Aumento Global"/>
+                                <field name="increase_percent" class="text-end"/>
+                            </div>
+                            <div class="col-lg-2">
+                                <label for="price_date_start" string="Vigencia desde"/>
+                                <field name="price_date_start"/>
+                            </div>
+                            <div class="col-lg-3 d-flex gap-2 justify-content-end align-items-end">
+                                <button name="action_load_products" type="object"
+                                    string="Cargar" class="btn btn-primary btn-sm"
+                                    icon="fa-refresh"/>
+                                <button name="action_view_history" type="object"
+                                    string="Historial" class="btn btn-secondary btn-sm"
+                                    icon="fa-history"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── Contadores ── -->
+                    <div class="d-flex gap-3 mb-3">
+                        <span class="badge bg-secondary">
+                            <field name="line_count" nolabel="1"/> productos
+                        </span>
+                        <span class="badge bg-primary">
+                            <field name="selected_count" nolabel="1"/> seleccionados
+                        </span>
+                    </div>
+
+                    <!-- ── Layout sidebar + tabla ── -->
+                    <div class="row g-0" style="min-height: 400px;">
+
+                        <!-- Sidebar categorías -->
+                        <div class="col-lg-3 col-md-4 pe-3 border-end"
+                             style="max-height: 520px; overflow-y: auto;">
+                            <!--
+                                El widget category_tree_widget reemplaza el Many2One
+                                con un árbol navegable estilo "Existencias".
+                                Llama action_load_products al seleccionar una categoría.
+                            -->
+                            <field name="filter_categ_id"
+                                widget="category_tree_widget"
+                                nolabel="1"/>
+                        </div>
+
+                        <!-- Tabla productos -->
+                        <div class="col-lg-9 col-md-8 ps-3">
+                            <div class="d-flex gap-2 mb-2 align-items-center">
+                                <button name="action_select_all" type="object"
+                                    string="Seleccionar todos"
+                                    class="btn btn-sm btn-outline-secondary"/>
+                                <button name="action_deselect_all" type="object"
+                                    string="Quitar selección"
+                                    class="btn btn-sm btn-outline-secondary"/>
+                                <span class="ms-auto text-muted"
+                                    style="font-size:11px">
+                                    Precios de referencia: primera lista seleccionada
+                                </span>
+                            </div>
+
+                            <field name="line_ids" nolabel="1">
+                                <list string="Productos"
+                                    editable="bottom"
+                                    decoration-success="apply and new_price &gt; current_price"
+                                    decoration-muted="not apply">
+                                    <field name="apply" widget="boolean_toggle" string="✓"/>
+                                    <field name="categ_id" string="Categoría"
+                                        optional="show" readonly="1"/>
+                                    <field name="product_id" string="Producto" readonly="1"/>
+                                    <field name="currency_id" column_invisible="1"/>
+                                    <field name="current_price" string="Precio Actual"
+                                        readonly="1" class="text-end"/>
+                                    <field name="increase_percent" string="% Aumento"
+                                        class="text-end"/>
+                                    <field name="new_price" string="Precio Nuevo"
+                                        class="text-end fw-bold"/>
+                                    <field name="diff_amount" string="Diferencia"
+                                        readonly="1" class="text-end" optional="show"/>
+                                    <field name="diff_percent_display" string="Δ%"
+                                        readonly="1" optional="show"/>
+                                </list>
+                            </field>
+                        </div>
+                    </div>
+
+                </sheet>
+                <footer>
+                    <button name="action_apply_prices" type="object"
+                        string="Aplicar Precios" class="btn btn-primary"
+                        confirm="¿Confirmar la actualización? Se vencerán los precios actuales y se registrará el cambio en el historial."/>
+                    <button string="Cancelar" class="btn btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── Acción menú ── -->
+    <record id="action_sale_price_update_wizard" model="ir.actions.act_window">
+        <field name="name">Actualizar Precios de Venta</field>
+        <field name="res_model">sale.price.update.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="view_id" ref="view_sale_price_update_wizard_form"/>
+    </record>
+
+    <!-- ── Server action: product.product (variantes) ── -->
+    <record id="action_sale_price_update_from_product" model="ir.actions.server">
+        <field name="name">Actualizar Precios de Venta</field>
+        <field name="model_id" ref="product.model_product_product"/>
+        <field name="binding_model_id" ref="product.model_product_product"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+action = env['sale.price.update.wizard'].with_context(
+    active_ids=records.ids,
+    active_model='product.product',
+).create({}).action_load_products()
+        </field>
+    </record>
+
+    <!-- ── Server action: product.template ── -->
+    <record id="action_sale_price_update_from_template" model="ir.actions.server">
+        <field name="name">Actualizar Precios de Venta</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+action = env['sale.price.update.wizard'].with_context(
+    active_ids=records.ids,
+    active_model='product.template',
+).create({}).action_load_products()
+        </field>
+    </record>
+
+</odoo>

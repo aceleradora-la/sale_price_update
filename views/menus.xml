@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Submenú bajo Ventas → Catálogo → Precios -->
+    <menuitem id="menu_sale_price_update_root"
+        name="Actualización de Precios"
+        parent="sale.product_menu_catalog"
+        sequence="50"/>
+
+    <menuitem id="menu_sale_price_update_wizard"
+        name="Actualizar Precios"
+        parent="menu_sale_price_update_root"
+        action="action_sale_price_update_wizard"
+        sequence="10"/>
+
+    <menuitem id="menu_sale_price_update_history"
+        name="Historial de Cambios"
+        parent="menu_sale_price_update_root"
+        action="action_sale_price_update_history"
+        sequence="20"/>
+
+</odoo>
