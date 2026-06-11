@@ -53,6 +53,17 @@ class SalePriceUpdateWizard(models.TransientModel):
     # ── Helpers computados ────────────────────────────────────────────
     line_count = fields.Integer("Productos cargados", compute="_compute_line_count")
     selected_count = fields.Integer("Seleccionados", compute="_compute_line_count")
+    use_weighing = fields.Boolean(
+        "Usa Pesaje", compute="_compute_use_weighing",
+        help="True si sale_stock_weighing está instalado y la empresa activa "
+             "el pesaje de productos. Controla la visibilidad de la columna "
+             "'Por Peso'.",
+    )
+
+    def _compute_use_weighing(self):
+        enabled = self._weighing_enabled()
+        for wiz in self:
+            wiz.use_weighing = enabled
 
     @api.depends("line_ids", "line_ids.apply")
     def _compute_line_count(self):
@@ -84,8 +95,10 @@ class SalePriceUpdateWizard(models.TransientModel):
         return domain
 
     def _weighing_enabled(self):
-        """True si el módulo sale_stock_weighing está instalado."""
-        return "is_weighed_price" in self.env["product.pricelist.item"]._fields
+        """True si sale_stock_weighing está instalado Y la empresa lo usa."""
+        if "is_weighed_price" not in self.env["product.pricelist.item"]._fields:
+            return False
+        return bool(getattr(self.env.company, "use_stock_weighing", False))
 
     def _is_weighed_product(self, product):
         return self._weighing_enabled() and getattr(
