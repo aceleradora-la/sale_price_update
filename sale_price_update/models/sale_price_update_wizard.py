@@ -181,6 +181,11 @@ class SalePriceUpdateWizard(models.TransientModel):
     def action_load_products(self):
         """Recarga las líneas (botón, opera sobre registro real)."""
         self.ensure_one()
+        if not self.pricelist_ids:
+            raise UserError(_(
+                "Seleccioná al menos una lista de precios antes de cargar "
+                "los productos: los precios se toman de la primera lista."
+            ))
         self.line_ids.unlink()
         self.write({"line_ids": self._build_line_commands()[1:]})  # sin el clear
         return self._reopen()
