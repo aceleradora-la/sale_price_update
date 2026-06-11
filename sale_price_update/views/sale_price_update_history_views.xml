@@ -6,7 +6,7 @@
         <field name="name">sale.price.update.history.list</field>
         <field name="model">sale.price.update.history</field>
         <field name="arch" type="xml">
-            <list string="Historial de Actualización de Precios" default_order="date_applied desc">
+            <tree string="Historial de Actualización de Precios" default_order="date_applied desc">
                 <field name="date_applied"/>
                 <field name="product_id"/>
                 <field name="categ_id"/>
@@ -16,7 +16,7 @@
                 <field name="increase_percent" string="% Aumento"/>
                 <field name="new_price" string="Precio Nuevo"/>
                 <field name="user_id"/>
-            </list>
+            </tree>
         </field>
     </record>
 
@@ -54,7 +54,7 @@
     <record id="action_sale_price_update_history" model="ir.actions.act_window">
         <field name="name">Historial de Actualización de Precios</field>
         <field name="res_model">sale.price.update.history</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">tree,form</field>
     </record>
 
 </odoo>

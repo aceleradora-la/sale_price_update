@@ -78,7 +78,7 @@
                             </div>
 
                             <field name="line_ids" nolabel="1">
-                                <list string="Productos"
+                                <tree string="Productos"
                                     editable="bottom"
                                     create="false" delete="false"
                                     decoration-success="apply and new_price &gt; current_price"
@@ -98,7 +98,7 @@
                                         readonly="1" class="text-end" optional="show"/>
                                     <field name="diff_percent_display" string="Δ%"
                                         readonly="1" optional="show"/>
-                                </list>
+                                </tree>
                             </field>
                         </div>
                     </div>

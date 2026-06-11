@@ -171,7 +171,7 @@ class SalePriceUpdateWizard(models.TransientModel):
             "name": _("Historial de Actualización de Precios"),
             "type": "ir.actions.act_window",
             "res_model": "sale.price.update.history",
-            "view_mode": "list,form",
+            "view_mode": "tree,form",
             "target": "current",
         }
 
