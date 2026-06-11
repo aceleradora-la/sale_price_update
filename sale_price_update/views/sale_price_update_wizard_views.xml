@@ -80,6 +80,7 @@
                             <field name="line_ids" nolabel="1">
                                 <list string="Productos"
                                     editable="bottom"
+                                    create="false" delete="false"
                                     decoration-success="apply and new_price &gt; current_price"
                                     decoration-muted="not apply">
                                     <field name="apply" widget="boolean_toggle" string="✓"/>
