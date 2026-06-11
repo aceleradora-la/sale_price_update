@@ -13,7 +13,7 @@
                 <field name="pricelist_id"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="old_price" string="Precio Anterior"/>
-                <field name="increase_percent" string="% Aumento" widget="percentage"/>
+                <field name="increase_percent" string="% Aumento"/>
                 <field name="new_price" string="Precio Nuevo"/>
                 <field name="user_id"/>
             </list>
@@ -37,7 +37,7 @@
                         <group string="Cambio aplicado">
                             <field name="date_applied"/>
                             <field name="old_price"/>
-                            <field name="increase_percent" widget="percentage"/>
+                            <field name="increase_percent"/>
                             <field name="new_price"/>
                             <field name="user_id"/>
                         </group>
@@ -60,9 +60,6 @@
                 <field name="pricelist_id"/>
                 <field name="categ_id"/>
                 <field name="user_id"/>
-                <separator/>
-                <filter string="Fecha de aplicación" name="date_applied_filter"
-                    date="date_applied"/>
                 <group expand="0" string="Agrupar por">
                     <filter string="Lista de Precios" name="group_pricelist" context="{'group_by': 'pricelist_id'}"/>
                     <filter string="Categoría" name="group_categ" context="{'group_by': 'categ_id'}"/>
