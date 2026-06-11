@@ -83,20 +83,40 @@ class SalePriceUpdateWizard(models.TransientModel):
             domain.append(("categ_id", "child_of", self.filter_categ_id.id))
         return domain
 
-    def _get_current_pricelist_price(self, product, pricelist):
-        """Precio vigente del producto en la lista, usando el motor de precios.
+    def _get_pricelist_prices(self, products, pricelist):
+        """Precios vigentes de un lote de productos en la lista dada.
 
-        _get_product_price resuelve cualquier tipo de regla (fija, fórmula,
-        descuento, por plantilla o categoría), no solo ítems fijos por variante.
+        Usa _compute_price_rule (una sola pasada del motor de precios para
+        todos los productos) en vez de resolver producto por producto.
+        Resuelve cualquier tipo de regla: fija, fórmula, descuento, por
+        plantilla o categoría. Devuelve {product_id: precio}.
         """
+        if not products:
+            return {}
         if not pricelist:
-            return product.lst_price
+            return {p.id: p.lst_price for p in products}
         try:
-            return pricelist._get_product_price(
-                product, 1.0, date=fields.Date.today()
+            rules = pricelist._compute_price_rule(
+                products, 1.0, date=fields.Date.today()
             )
+            return {pid: price for pid, (price, _rule) in rules.items()}
         except Exception:
-            return product.lst_price
+            # Fallback defensivo ante cambios de firma entre versiones
+            prices = {}
+            for product in products:
+                try:
+                    prices[product.id] = pricelist._get_product_price(
+                        product, 1.0, date=fields.Date.today()
+                    )
+                except Exception:
+                    prices[product.id] = product.lst_price
+            return prices
+
+    def _get_current_pricelist_price(self, product, pricelist):
+        """Precio vigente de un solo producto (wrapper del batch)."""
+        return self._get_pricelist_prices(product, pricelist).get(
+            product.id, product.lst_price
+        )
 
     def _build_line_commands(self):
         """Arma los comandos One2many para recrear las líneas en memoria.
@@ -108,10 +128,11 @@ class SalePriceUpdateWizard(models.TransientModel):
         )
         ref_pricelist = self.pricelist_ids[:1]
         pct = self.increase_percent or 0.0
+        prices = self._get_pricelist_prices(products, ref_pricelist)
 
         commands = [Command.clear()]
         for product in products:
-            current_price = self._get_current_pricelist_price(product, ref_pricelist)
+            current_price = prices.get(product.id, product.lst_price)
             commands.append(Command.create({
                 "product_id": product.id,
                 "categ_id": product.categ_id.id,
@@ -198,6 +219,13 @@ class SalePriceUpdateWizard(models.TransientModel):
         applied_count = 0
         for pricelist in self.pricelist_ids:
             currency = pricelist.currency_id
+            # Precios vigentes de esta lista en lote (solo listas secundarias;
+            # la de referencia usa los precios ya previsualizados en pantalla)
+            list_prices = {}
+            if pricelist != ref_pricelist:
+                list_prices = self._get_pricelist_prices(
+                    lines_to_apply.mapped("product_id"), pricelist
+                )
             for line in lines_to_apply:
                 # % efectivo de la línea: si el usuario editó el precio nuevo
                 # a mano, se deriva del cambio real; si no, el % cargado.
@@ -218,8 +246,8 @@ class SalePriceUpdateWizard(models.TransientModel):
                     old_price = line.current_price
                     new_price = line.new_price
                 else:
-                    old_price = self._get_current_pricelist_price(
-                        line.product_id, pricelist
+                    old_price = list_prices.get(
+                        line.product_id.id, line.product_id.lst_price
                     )
                     if old_price:
                         new_price = old_price * (1.0 + effective_pct / 100.0)
