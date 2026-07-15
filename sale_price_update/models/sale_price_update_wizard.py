@@ -278,12 +278,30 @@ class SalePriceUpdateWizard(models.TransientModel):
                 # - Ítems que arrancan en date_start o después → se eliminan
                 #   (quedarían con vigencia imposible).
                 # - El resto → date_end = día anterior a la nueva vigencia.
-                existing = PricelistItem.search([
+                # Ítems a vencer: los de la variante, y también los de la
+                # plantilla (los precios cargados desde la ficha del producto
+                # se guardan con applied_on='1_product'). Las reglas de
+                # plantilla solo se tocan si la plantilla tiene una única
+                # variante — si hay varias, vencerla afectaría a las hermanas.
+                tmpl = line.product_id.product_tmpl_id
+                item_domain = [
                     ("pricelist_id", "=", pricelist.id),
-                    ("applied_on", "=", "0_product_variant"),
-                    ("product_id", "=", line.product_id.id),
                     "|", ("date_end", "=", False), ("date_end", ">=", date_start),
-                ])
+                ]
+                if tmpl.product_variant_count == 1:
+                    item_domain += [
+                        "|",
+                        "&", ("applied_on", "=", "0_product_variant"),
+                             ("product_id", "=", line.product_id.id),
+                        "&", ("applied_on", "=", "1_product"),
+                             ("product_tmpl_id", "=", tmpl.id),
+                    ]
+                else:
+                    item_domain += [
+                        ("applied_on", "=", "0_product_variant"),
+                        ("product_id", "=", line.product_id.id),
+                    ]
+                existing = PricelistItem.search(item_domain)
                 for item in existing:
                     item_start = item.date_start
                     if item_start and hasattr(item_start, "date"):
