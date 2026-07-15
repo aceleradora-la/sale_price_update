@@ -9,13 +9,11 @@
         <field name="inherit_id" ref="product.product_pricelist_view"/>
         <field name="arch" type="xml">
 
-            <!-- Botón en el header -->
-            <xpath expr="//sheet" position="before">
-                <header>
-                    <button name="action_spu_open_price_update" type="object"
-                        string="Actualizar Precios" class="btn-primary"
-                        icon="fa-refresh"/>
-                </header>
+            <!-- Botón dentro del header existente, al lado de "Imprimir" -->
+            <xpath expr="//header" position="inside">
+                <button name="action_spu_open_price_update" type="object"
+                    string="Actualizar Precios" class="btn-primary"
+                    icon="fa-refresh"/>
             </xpath>
 
             <!-- Sección con los precios vigentes/futuros (después de las reglas) -->
