@@ -26,7 +26,7 @@
                     cada línea podés ver el historial de cambios del producto.
                 </div>
                 <field name="spu_current_item_ids" readonly="1" nolabel="1">
-                    <list string="Precios Vigentes y Futuros" create="false"
+                    <tree string="Precios Vigentes y Futuros" create="false"
                           delete="false" edit="false">
                         <field name="product_id" optional="show"/>
                         <field name="product_tmpl_id" optional="hide"/>
@@ -38,7 +38,7 @@
                         <button name="action_spu_view_history" type="object"
                             string="Historial" icon="fa-history"
                             help="Ver el historial de cambios de precio de este producto en esta lista"/>
-                    </list>
+                    </tree>
                 </field>
             </xpath>
 

@@ -25,7 +25,7 @@ class ProductPricelistItem(models.Model):
             "name": _("Historial de Precios — %s", title_product or self.pricelist_id.name),
             "type": "ir.actions.act_window",
             "res_model": "sale.price.update.history",
-            "view_mode": "list,form",
+            "view_mode": "tree,form",
             "domain": domain,
             "target": "new",
         }
