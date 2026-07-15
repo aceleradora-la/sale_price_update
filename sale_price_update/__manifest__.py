@@ -14,6 +14,7 @@
         "security/ir.model.access.csv",
         "views/sale_price_update_history_views.xml",
         "views/sale_price_update_wizard_views.xml",
+        "views/product_pricelist_views.xml",
         "views/menus.xml",
     ],
     "assets": {

@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -105,39 +103,33 @@ class SalePriceUpdateWizard(models.TransientModel):
             product, "is_weighed_product", False
         )
 
-    def _get_pricelist_prices(self, products, pricelist, date=None):
-        """Precios vigentes de un lote de productos en la lista dada.
+    def _get_pricelist_price_info(self, products, pricelist, at_date=None):
+        """Info de precio (precio, pesable, has_item) por producto en la lista.
 
-        Delegado en product.pricelist._spu_get_prices (compartido con otros
-        módulos del repo). Devuelve {product_id: precio}.
+        Lee directamente de los ítems vigentes de la lista — NO cae al precio
+        de venta del maestro cuando la lista no tiene precio para el producto.
         """
-        if not products:
+        if not products or not pricelist:
             return {}
-        if not pricelist:
-            return {p.id: p.lst_price for p in products}
-        return pricelist._spu_get_prices(products, date=date)
-
-    def _get_current_pricelist_price(self, product, pricelist):
-        """Precio vigente de un solo producto (wrapper del batch)."""
-        return self._get_pricelist_prices(product, pricelist).get(
-            product.id, product.lst_price
-        )
+        return pricelist._spu_get_price_info(products, at_date=at_date)
 
     def _build_line_commands(self):
         """Arma los comandos One2many para recrear las líneas en memoria.
 
         No escribe en la base: apto para usarse dentro de @api.onchange.
+        El precio actual se lee de la primera lista, vigente al día de hoy.
         """
         products = self.env["product.product"].search(
             self._get_products_domain(), order="categ_id, default_code, name"
         )
         ref_pricelist = self.pricelist_ids[:1]
         pct = self.increase_percent or 0.0
-        prices = self._get_pricelist_prices(products, ref_pricelist)
+        info = self._get_pricelist_price_info(products, ref_pricelist)
 
         commands = [Command.clear()]
         for product in products:
-            current_price = prices.get(product.id, product.lst_price)
+            data = info.get(product.id, {})
+            current_price = data.get("price", 0.0)
             commands.append(Command.create({
                 "product_id": product.id,
                 "categ_id": product.categ_id.id,
@@ -145,6 +137,8 @@ class SalePriceUpdateWizard(models.TransientModel):
                 "increase_percent": 0.0,
                 "new_price": current_price * (1.0 + pct / 100.0),
                 "apply": True,
+                # Cómo se guardará el precio nuevo: según el maestro del
+                # producto (aunque hoy la lista no tenga ítem pesable).
                 "is_weighed": self._is_weighed_product(product),
             }))
         return commands
@@ -231,18 +225,19 @@ class SalePriceUpdateWizard(models.TransientModel):
         # registro de auditoría debe crearse siempre.
         History = self.env["sale.price.update.history"].sudo()
         date_start = self.price_date_start
-        date_end_prev = date_start - timedelta(days=1)
 
         ref_pricelist = self.pricelist_ids[:1]
         applied_count = 0
         for pricelist in self.pricelist_ids:
             currency = pricelist.currency_id
+            # Límites de fecha con el tipo correcto (datetime en Odoo 17+).
+            new_start, prev_end = pricelist._spu_period_bounds(date_start)
             # Precios vigentes de esta lista en lote (solo listas secundarias;
             # la de referencia usa los precios ya previsualizados en pantalla)
             list_prices = {}
             if pricelist != ref_pricelist:
-                list_prices = self._get_pricelist_prices(
-                    lines_to_apply.mapped("product_id"), pricelist
+                list_prices = pricelist._spu_get_prices(
+                    lines_to_apply.mapped("product_id")
                 )
             for line in lines_to_apply:
                 # % efectivo de la línea: si el usuario editó el precio nuevo
@@ -264,9 +259,7 @@ class SalePriceUpdateWizard(models.TransientModel):
                     old_price = line.current_price
                     new_price = line.new_price
                 else:
-                    old_price = list_prices.get(
-                        line.product_id.id, line.product_id.lst_price
-                    )
+                    old_price = list_prices.get(line.product_id.id, 0.0)
                     if old_price:
                         new_price = old_price * (1.0 + effective_pct / 100.0)
                     else:
@@ -286,7 +279,7 @@ class SalePriceUpdateWizard(models.TransientModel):
                 tmpl = line.product_id.product_tmpl_id
                 item_domain = [
                     ("pricelist_id", "=", pricelist.id),
-                    "|", ("date_end", "=", False), ("date_end", ">=", date_start),
+                    "|", ("date_end", "=", False), ("date_end", ">=", new_start),
                 ]
                 if tmpl.product_variant_count == 1:
                     item_domain += [
@@ -304,12 +297,13 @@ class SalePriceUpdateWizard(models.TransientModel):
                 existing = PricelistItem.search(item_domain)
                 for item in existing:
                     item_start = item.date_start
-                    if item_start and hasattr(item_start, "date"):
-                        item_start = item_start.date()
-                    if item_start and item_start >= date_start:
+                    # Ítem que arranca en la nueva vigencia o después →
+                    # se elimina (quedaría con período imposible). El resto
+                    # se vence justo antes de que rija el nuevo precio.
+                    if item_start and item_start >= new_start:
                         item.unlink()
                     else:
-                        item.write({"date_end": date_end_prev})
+                        item.write({"date_end": prev_end})
 
                 is_weighed = self._is_weighed_product(line.product_id)
                 uom_suffix = ""
@@ -335,7 +329,7 @@ class SalePriceUpdateWizard(models.TransientModel):
                     "product_id": line.product_id.id,
                     "applied_on": "0_product_variant",
                     "compute_price": "fixed",
-                    "date_start": date_start,
+                    "date_start": new_start,
                     "date_end": False,
                     "sale_price_update_note": note,
                 }

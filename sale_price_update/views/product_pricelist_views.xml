@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Botón "Actualizar Precios" + sección "Precios Vigentes/Futuros"
+         en el formulario de la lista de precios ── -->
+    <record id="view_product_pricelist_form_spu" model="ir.ui.view">
+        <field name="name">product.pricelist.form.spu</field>
+        <field name="model">product.pricelist</field>
+        <field name="inherit_id" ref="product.product_pricelist_view"/>
+        <field name="arch" type="xml">
+
+            <!-- Botón en el header -->
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_spu_open_price_update" type="object"
+                        string="Actualizar Precios" class="btn-primary"
+                        icon="fa-refresh"/>
+                </header>
+            </xpath>
+
+            <!-- Sección con los precios vigentes/futuros (después de las reglas) -->
+            <xpath expr="//field[@name='item_ids']" position="after">
+                <separator string="Precios Vigentes / Futuros"/>
+                <div class="text-muted mb-2" style="font-size:12px">
+                    Solo ítems cuyo precio sigue vigente o rige a futuro. Desde
+                    cada línea podés ver el historial de cambios del producto.
+                </div>
+                <field name="spu_current_item_ids" readonly="1" nolabel="1">
+                    <list string="Precios Vigentes y Futuros" create="false"
+                          delete="false" edit="false">
+                        <field name="product_id" optional="show"/>
+                        <field name="product_tmpl_id" optional="hide"/>
+                        <field name="categ_id" optional="hide"/>
+                        <field name="compute_price" optional="hide"/>
+                        <field name="fixed_price" optional="show"/>
+                        <field name="date_start" optional="show"/>
+                        <field name="date_end" optional="show"/>
+                        <button name="action_spu_view_history" type="object"
+                            string="Historial" icon="fa-history"
+                            help="Ver el historial de cambios de precio de este producto en esta lista"/>
+                    </list>
+                </field>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>
