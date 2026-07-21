@@ -55,18 +55,13 @@ class SalePricelistReportWizard(models.TransientModel):
             )
 
     # ── Carga de líneas y clientes ────────────────────────────────────
-    def _get_products_domain(self):
-        domain = [("sale_ok", "=", True), ("active", "=", True)]
-        if self.filter_categ_id:
-            domain.append(("categ_id", "child_of", self.filter_categ_id.id))
-        return domain
-
     def _build_line_commands(self):
         """Reconstruye las líneas en memoria (apto para onchange)."""
         if not self.pricelist_id:
             return [Command.clear()]
-        products = self.env["product.product"].search(
-            self._get_products_domain(), order="categ_id, default_code, name"
+        # Solo productos de venta con precio en ESTA lista a la fecha elegida.
+        products = self.pricelist_id._spu_priced_products(
+            at_date=self.date, categ=self.filter_categ_id
         )
         prices = self.pricelist_id._spu_get_prices(products, date=self.date)
         weighing = self.pricelist_id._spu_weighing_enabled()
@@ -145,8 +140,8 @@ class SalePricelistReportWizard(models.TransientModel):
         depende de lo que el cliente web haya guardado.
         """
         self.ensure_one()
-        products = self.env["product.product"].search(
-            self._get_products_domain(), order="categ_id, default_code, name"
+        products = self.pricelist_id._spu_priced_products(
+            at_date=self.date, categ=self.filter_categ_id
         )
         prices = self.pricelist_id._spu_get_prices(products, date=self.date)
         weighing = self.pricelist_id._spu_weighing_enabled()
