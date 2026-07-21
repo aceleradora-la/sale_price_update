@@ -168,6 +168,54 @@ class ProductPricelist(models.Model):
         info = self._spu_get_price_info(products, at_date=date)
         return {pid: d["price"] for pid, d in info.items()}
 
+    def _spu_priced_products(self, at_date=None, categ=None):
+        """Productos de VENTA que tienen precio en ESTA lista a la fecha dada.
+
+        Deriva el conjunto de los ítems vigentes de la lista (no de todo el
+        maestro de productos): ítems por variante, por plantilla o por
+        categoría. Se ignoran las reglas globales (no representan un precio
+        por producto para un reporte). Devuelve solo productos vendibles
+        (sale_ok) y activos, opcionalmente acotados a una categoría.
+        """
+        self.ensure_one()
+        Product = self.env["product.product"]
+        at_dt = self._spu_coerce_dt(at_date)
+        ftype = self.env["product.pricelist.item"]._fields["date_start"].type
+        at_val = at_dt.date() if ftype == "date" else at_dt
+
+        in_force = self.item_ids.filtered(
+            lambda i: (not i.date_start or i.date_start <= at_val)
+            and (not i.date_end or i.date_end >= at_val)
+        )
+
+        products = Product.browse()
+        category_ids = set()
+        for item in in_force:
+            if item.applied_on == "0_product_variant" and item.product_id:
+                products |= item.product_id
+            elif item.applied_on == "1_product" and item.product_tmpl_id:
+                products |= item.product_tmpl_id.product_variant_ids
+            elif item.applied_on == "2_product_category" and item.categ_id:
+                category_ids.add(item.categ_id.id)
+            # 3_global se ignora a propósito
+
+        domain = [("sale_ok", "=", True), ("active", "=", True)]
+        extra = []
+        if products:
+            extra.append(("id", "in", products.ids))
+        if category_ids:
+            extra.append(("categ_id", "child_of", list(category_ids)))
+        if not extra:
+            return Product.browse()
+        # Unir ambos orígenes (ids explícitos OR categorías)
+        if len(extra) == 2:
+            domain += ["|"] + [extra[0]] + [extra[1]]
+        else:
+            domain += extra
+        if categ:
+            domain.append(("categ_id", "child_of", categ.id))
+        return Product.search(domain, order="categ_id, default_code, name")
+
     # ── Abrir el asistente de actualización con esta lista ya elegida ──
     def action_spu_open_price_update(self):
         self.ensure_one()
