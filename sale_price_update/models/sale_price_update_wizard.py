@@ -324,15 +324,29 @@ class SalePriceUpdateWizard(models.TransientModel):
                     pricelist.name,
                 )
 
+                # Mismo criterio que el vencimiento de arriba: si la plantilla
+                # tiene una sola variante, el precio se guarda a nivel
+                # plantilla (que es como Odoo los carga desde la ficha del
+                # producto y como quedan visibles/manejables). Con múltiples
+                # variantes hay que ser específico y usar la variante.
+                # sale_stock_weighing soporta ambos niveles en su matcher.
                 item_vals = {
                     "pricelist_id": pricelist.id,
-                    "product_id": line.product_id.id,
-                    "applied_on": "0_product_variant",
                     "compute_price": "fixed",
                     "date_start": new_start,
                     "date_end": False,
                     "sale_price_update_note": note,
                 }
+                if tmpl.product_variant_count == 1:
+                    item_vals.update({
+                        "applied_on": "1_product",
+                        "product_tmpl_id": tmpl.id,
+                    })
+                else:
+                    item_vals.update({
+                        "applied_on": "0_product_variant",
+                        "product_id": line.product_id.id,
+                    })
                 if is_weighed:
                     # sale_stock_weighing: el precio va en price_per_weight
                     item_vals.update({

@@ -26,7 +26,8 @@
                     <field name="spu_current_item_ids" readonly="1" nolabel="1">
                         <tree string="Precios Vigentes y Futuros" create="false"
                               delete="false" edit="false">
-                            <field name="product_id" optional="show"/>
+                            <field name="name" string="Aplicado a"/>
+                            <field name="product_id" optional="hide"/>
                             <field name="product_tmpl_id" optional="hide"/>
                             <field name="categ_id" optional="hide"/>
                             <field name="compute_price" optional="hide"/>
