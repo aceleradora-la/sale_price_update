@@ -1,6 +1,6 @@
 {
     "name": "Pricelist Report & Send to Customers",
-    "version": "18.0.1.0.1",
+    "version": "18.0.1.0.2",
     "category": "Sales/Sales",
     "summary": "Reporte PDF de precios vigentes de una lista a una fecha, con envío por email a los clientes que tienen esa lista asignada.",
     "author": "Aceleradora LA",

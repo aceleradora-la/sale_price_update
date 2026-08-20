@@ -31,7 +31,8 @@
                             <field name="product_tmpl_id" optional="hide"/>
                             <field name="categ_id" optional="hide"/>
                             <field name="compute_price" optional="hide"/>
-                            <field name="fixed_price" optional="show"/>
+                            <field name="spu_price_display" string="Precio"/>
+                            <field name="fixed_price" optional="hide"/>
                             <field name="date_start" optional="show"/>
                             <field name="date_end" optional="show"/>
                             <button name="action_spu_view_history" type="object"
