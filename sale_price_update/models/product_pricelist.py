@@ -143,12 +143,20 @@ class ProductPricelist(models.Model):
             is_weighed = bool(
                 weighing and getattr(item, "is_weighed_price", False)
             )
-            if is_weighed:
+            if is_weighed and item.compute_price == "fixed":
+                # pesable con precio fijo por kg
                 price = item.price_per_weight
+            elif is_weighed:
+                # pesable por fórmula/descuento (basado en otra lista):
+                # lo computa el override de sale_stock_weighing en _get_product_price
+                try:
+                    price = self._get_product_price(product, 1.0, date=at_dt)
+                except Exception:
+                    price = getattr(item, "price_per_weight", 0.0) or 0.0
             elif item.compute_price == "fixed":
                 price = item.fixed_price
             else:
-                # fórmula/descuento: dejar que el motor lo calcule
+                # fórmula/descuento normal: dejar que el motor lo calcule
                 try:
                     price = self._get_product_price(product, 1.0, date=at_dt)
                 except Exception:
@@ -169,52 +177,29 @@ class ProductPricelist(models.Model):
         return {pid: d["price"] for pid, d in info.items()}
 
     def _spu_priced_products(self, at_date=None, categ=None):
-        """Productos de VENTA que tienen precio en ESTA lista a la fecha dada.
+        """Productos de VENTA con precio efectivo en ESTA lista a la fecha dada.
 
-        Deriva el conjunto de los ítems vigentes de la lista (no de todo el
-        maestro de productos): ítems por variante, por plantilla o por
-        categoría. Se ignoran las reglas globales (no representan un precio
-        por producto para un reporte). Devuelve solo productos vendibles
-        (sale_ok) y activos, opcionalmente acotados a una categoría.
+        Toma los productos vendibles y activos (opcionalmente acotados a una
+        categoría) y se queda con los que tienen un ítem vigente que les
+        aplica (por variante, plantilla, categoría o regla global) y del que
+        resulta un precio > 0. Se apoya en _spu_get_price_info, que ya lee
+        directamente de los ítems (sin caer al precio de venta del maestro).
         """
         self.ensure_one()
         Product = self.env["product.product"]
-        at_dt = self._spu_coerce_dt(at_date)
-        ftype = self.env["product.pricelist.item"]._fields["date_start"].type
-        at_val = at_dt.date() if ftype == "date" else at_dt
-
-        in_force = self.item_ids.filtered(
-            lambda i: (not i.date_start or i.date_start <= at_val)
-            and (not i.date_end or i.date_end >= at_val)
-        )
-
-        products = Product.browse()
-        category_ids = set()
-        for item in in_force:
-            if item.applied_on == "0_product_variant" and item.product_id:
-                products |= item.product_id
-            elif item.applied_on == "1_product" and item.product_tmpl_id:
-                products |= item.product_tmpl_id.product_variant_ids
-            elif item.applied_on == "2_product_category" and item.categ_id:
-                category_ids.add(item.categ_id.id)
-            # 3_global se ignora a propósito
-
         domain = [("sale_ok", "=", True), ("active", "=", True)]
-        extra = []
-        if products:
-            extra.append(("id", "in", products.ids))
-        if category_ids:
-            extra.append(("categ_id", "child_of", list(category_ids)))
-        if not extra:
-            return Product.browse()
-        # Unir ambos orígenes (ids explícitos OR categorías)
-        if len(extra) == 2:
-            domain += ["|"] + [extra[0]] + [extra[1]]
-        else:
-            domain += extra
         if categ:
             domain.append(("categ_id", "child_of", categ.id))
-        return Product.search(domain, order="categ_id, default_code, name")
+        candidates = Product.search(
+            domain, order="categ_id, default_code, name"
+        )
+        if not candidates:
+            return candidates
+        info = self._spu_get_price_info(candidates, at_date=at_date)
+        return candidates.filtered(
+            lambda p: info.get(p.id, {}).get("has_item")
+            and info[p.id].get("price", 0.0) > 0
+        )
 
     # ── Abrir el asistente de actualización con esta lista ya elegida ──
     def action_spu_open_price_update(self):
