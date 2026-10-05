@@ -1,6 +1,6 @@
 {
     "name": "Sale Price Update Assistant",
-    "version": "17.0.1.0.2",
+    "version": "17.0.1.0.3",
     "category": "Sales/Sales",
     "summary": "Wizard para actualización masiva de precios de venta por categoría o selección, con historial y preview de cambios.",
     "author": "Aceleradora LA",

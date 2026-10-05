@@ -348,15 +348,25 @@ class SalePriceUpdateWizard(models.TransientModel):
                         "product_id": line.product_id.id,
                     })
                 if is_weighed:
-                    # sale_stock_weighing: el precio va en price_per_weight
+                    # sale_stock_weighing: el precio va en price_per_weight.
+                    # El fixed_price (precio por unidad de venta estimado) se
+                    # completa después de crear, replicando lo que hace el
+                    # onchange manual del módulo de pesaje.
                     item_vals.update({
                         "is_weighed_price": True,
                         "price_per_weight": new_price,
-                        "fixed_price": 0.0,
                     })
                 else:
                     item_vals["fixed_price"] = new_price
-                PricelistItem.create(item_vals)
+                item = PricelistItem.create(item_vals)
+
+                # Estimar fixed_price igual que la carga manual (create() no
+                # dispara onchanges). Usa el método del propio módulo de pesaje
+                # para no duplicar la lógica; nunca pisa con cero.
+                if is_weighed and hasattr(item, "_compute_weighed_fixed_price"):
+                    estimated = item._compute_weighed_fixed_price()
+                    if estimated:
+                        item.fixed_price = estimated
 
                 History.create({
                     "pricelist_id": pricelist.id,
